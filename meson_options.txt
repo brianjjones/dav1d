@@ -53,3 +53,8 @@ option('fuzzer_ldflags',
 option('stack_alignment',
     type: 'integer',
     value: 0)
+
+option('fake_atomics',
+    type: 'boolean',
+    value: false,
+    description: 'Use fake single-threaded atomics')

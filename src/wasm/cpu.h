@@ -25,27 +25,13 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DAV1D_SRC_CPU_H
-#define DAV1D_SRC_CPU_H
+#ifndef DAV1D_SRC_WASM_CPU_H
+#define DAV1D_SRC_WASM_CPU_H
 
-#include "config.h"
+enum CpuFlags {
+    DAV1D_WASM_CPU_FLAG_SIMD_128 = 1 << 0,
+};
 
-#include "common/attributes.h"
+unsigned dav1d_get_cpu_flags_wasm(void);
 
-#include "dav1d/common.h"
-
-#if ARCH_AARCH64 || ARCH_ARM
-#include "src/arm/cpu.h"
-#elif ARCH_PPC64LE
-#include "src/ppc/cpu.h"
-#elif ARCH_X86
-#include "src/x86/cpu.h"
-#elif ARCH_WASM
-#include "src/wasm/cpu.h"
-#endif
-
-void dav1d_init_cpu(void);
-unsigned dav1d_get_cpu_flags(void);
-DAV1D_API void dav1d_set_cpu_flags_mask(unsigned mask);
-
-#endif /* DAV1D_SRC_CPU_H */
+#endif /* DAV1D_SRC_WASM_CPU_H */

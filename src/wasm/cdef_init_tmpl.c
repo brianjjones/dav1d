@@ -25,27 +25,24 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DAV1D_SRC_CPU_H
-#define DAV1D_SRC_CPU_H
+#include "src/cpu.h"
+#include "src/cdef.h"
 
-#include "config.h"
+decl_cdef_fn(dav1d_cdef_filter_8x8_wasm);
+decl_cdef_fn(dav1d_cdef_filter_4x8_wasm);
+decl_cdef_fn(dav1d_cdef_filter_4x4_wasm);
 
-#include "common/attributes.h"
+//decl_cdef_dir_fn(dav1d_cdef_dir_wasm);
 
-#include "dav1d/common.h"
+void bitfn(dav1d_cdef_dsp_init_wasm)(Dav1dCdefDSPContext *const c) {
+    const unsigned flags = dav1d_get_cpu_flags();
 
-#if ARCH_AARCH64 || ARCH_ARM
-#include "src/arm/cpu.h"
-#elif ARCH_PPC64LE
-#include "src/ppc/cpu.h"
-#elif ARCH_X86
-#include "src/x86/cpu.h"
-#elif ARCH_WASM
-#include "src/wasm/cpu.h"
+    if (!(flags & DAV1D_WASM_CPU_FLAG_SIMD_128)) return;
+
+#if BITDEPTH == 8 && ARCH_WASM
+    //c->dir = dav1d_cdef_dir_wasm;
+    c->fb[0] = dav1d_cdef_filter_8x8_wasm;
+    c->fb[1] = dav1d_cdef_filter_4x8_wasm;
+    c->fb[2] = dav1d_cdef_filter_4x4_wasm;
 #endif
-
-void dav1d_init_cpu(void);
-unsigned dav1d_get_cpu_flags(void);
-DAV1D_API void dav1d_set_cpu_flags_mask(unsigned mask);
-
-#endif /* DAV1D_SRC_CPU_H */
+}

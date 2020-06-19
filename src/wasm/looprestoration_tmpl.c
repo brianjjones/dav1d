@@ -25,14 +25,18 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "config.h"
-
-#include <stdlib.h>
-
-#include "common/intops.h"
-
+#include "src/cpu.h"
 #include "src/looprestoration.h"
+
+#include "common/attributes.h"
+#include "common/intops.h"
 #include "src/tables.h"
+
+#include "wasm_simd.h"
+
+#include <stdio.h>
+
+#if BITDEPTH == 8
 
 // 256 * 1.5 + 3 + 3 = 390
 #define REST_UNIT_STRIDE (390)
@@ -131,12 +135,12 @@ static void padding(pixel *dst, const pixel *p, const ptrdiff_t p_stride,
 // (since first and last tops are always 0 for chroma)
 // FIXME Could implement a version that requires less temporary memory
 // (should be possible to implement with only 6 rows of temp storage)
-static void wiener_c(pixel *p, const ptrdiff_t p_stride,
-                     const pixel (*const left)[4],
-                     const pixel *lpf, const ptrdiff_t lpf_stride,
-                     const int w, const int h,
-                     const int16_t filterh[7], const int16_t filterv[7],
-                     const enum LrEdgeFlags edges HIGHBD_DECL_SUFFIX)
+static void wiener_wasm(pixel *p, const ptrdiff_t p_stride,
+                        const pixel (*const left)[4],
+                        const pixel *lpf, const ptrdiff_t lpf_stride,
+                        const int w, const int h,
+                        const int16_t filterh[7], const int16_t filterv[7],
+                        const enum LrEdgeFlags edges HIGHBD_DECL_SUFFIX)
 {
     // Wiener filtering is applied to a maximum stripe height of 64 + 3 pixels
     // of padding above and below
@@ -155,15 +159,44 @@ static void wiener_c(pixel *p, const ptrdiff_t p_stride,
     const int rounding_off_h = 1 << (round_bits_h - 1);
     const int clip_limit = 1 << (bitdepth + 1 + 7 - round_bits_h);
     for (int j = 0; j < h + 6; j++) {
-        for (int i = 0; i < w; i++) {
-            int sum = (tmp_ptr[i + 3] << 7) + (1 << (bitdepth + 6));
-
+        if (w >= 8) {
+            // Pre-splat some stuff.
+            const uint16x8 zero_v = wasm_i16x8_splat(0);
+            const uint16x8 clip_limit_min_1_v = wasm_i16x8_splat(clip_limit - 1);
+            const uint16x8 bitdepth_rnd_v = wasm_i16x8_splat(1 << (bitdepth + 6));
+            const uint16x8 rounding_off_h_v = wasm_i16x8_splat(rounding_off_h);
+            uint16x8 filterh_v[8];
             for (int k = 0; k < 7; k++) {
-                sum += tmp_ptr[i + k] * filterh[k];
+                filterh_v[k] = wasm_i16x8_splat(filterh[k]);
             }
 
-            hor_ptr[i] =
-                iclip((sum + rounding_off_h) >> round_bits_h, 0, clip_limit - 1);
+            // Work on 8 pixels at a time.
+            for (int i = 0; i < w; i += 8) {
+                const int16x8 tap = expand_pixels(read_u8x16(tmp_ptr + i + 3));
+                int16x8 sum = wasm_i16x8_shl(tap, 7) + bitdepth_rnd_v;
+
+                for (int k = 0; k < 7; k++) {
+                    const int16x8 tapk = expand_pixels(read_u8x16(tmp_ptr + i + k));
+                    sum += tapk * filterh_v[k];
+                }
+
+                write_u16x8(hor_ptr + i,
+                    clip_vec(
+                        wasm_u16x8_shr(sum + rounding_off_h_v, round_bits_h),
+                        zero_v,
+                        clip_limit_min_1_v));
+            }
+        } else {
+            for (int i = 0; i < w; i++) {
+                int sum = (tmp_ptr[i + 3] << 7) + (1 << (bitdepth + 6));
+
+                for (int k = 0; k < 7; k++) {
+                    sum += tmp_ptr[i + k] * filterh[k];
+                }
+
+                hor_ptr[i] =
+                    iclip((sum + rounding_off_h) >> round_bits_h, 0, clip_limit - 1);
+            }
         }
         tmp_ptr += REST_UNIT_STRIDE;
         hor_ptr += REST_UNIT_STRIDE;
@@ -172,19 +205,47 @@ static void wiener_c(pixel *p, const ptrdiff_t p_stride,
     const int round_bits_v = 11 - (bitdepth == 12) * 2;
     const int rounding_off_v = 1 << (round_bits_v - 1);
     const int round_offset = 1 << (bitdepth + (round_bits_v - 1));
-    for (int j = 0; j < h; j++) {
-        for (int i = 0; i < w; i++) {
-            int sum = (hor[(j + 3) * REST_UNIT_STRIDE + i] << 7) - round_offset;
+    if (w >= 4) {
+        // Pre-splat some stuff.
+        const uint32x4 round_offset_v = wasm_i32x4_splat(round_offset);
+        const uint32x4 rounding_off_v_v = wasm_i32x4_splat(rounding_off_v);
+        uint32x4 filterv_v[8];
+        for (int k = 0; k < 7; k++) {
+            filterv_v[k] = wasm_i32x4_splat(filterv[k]);
+        }
 
-            for (int k = 0; k < 7; k++) {
-                sum += hor[(j + k) * REST_UNIT_STRIDE + i] * filterv[k];
+        // Operate on 4 pixels at a time...
+        for (int i = 0; i < w; i += 4) {
+            for (int j = 0; j < h; j++) {
+                const int32x4 tap = expand_pixels32(read_u16x8(hor + (j + 3) * REST_UNIT_STRIDE + i));
+                int32x4 sum = wasm_i32x4_sub(wasm_i32x4_shl(tap, 7), round_offset_v);
+
+                for (int k = 0; k < 7; k++) {
+                    const int32x4 tapk = expand_pixels32(read_u16x8(hor + (j + k) * REST_UNIT_STRIDE + i));
+                    sum += wasm_i32x4_mul(tapk, filterv_v[k]);
+                }
+
+                const int32x4 px_v = wasm_i32x4_shr(sum + rounding_off_v_v, round_bits_v);
+                write_u8x16_4x1(p + j * PXSTRIDE(p_stride) + i, merge_pixels32(px_v));
             }
+        }
+    } else {
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < h; j++) {
+                int sum = (hor[(j + 3) * REST_UNIT_STRIDE + i] << 7) - round_offset;
 
-            p[j * PXSTRIDE(p_stride) + i] =
-                iclip_pixel((sum + rounding_off_v) >> round_bits_v);
+                for (int k = 0; k < 7; k++) {
+                    sum += hor[(j + k) * REST_UNIT_STRIDE + i] * filterv[k];
+                }
+
+                p[j * PXSTRIDE(p_stride) + i] =
+                    iclip_pixel((sum + rounding_off_v) >> round_bits_v);
+            }
         }
     }
 }
+
+#if 0
 
 // Sum over a 3x3 area
 // The dst and src pointers are positioned 3 pixels above and 3 pixels to the
@@ -511,7 +572,7 @@ static void selfguided_filter(coef *dst, const pixel *src,
 #undef EIGHT_NEIGHBORS
 }
 
-static void selfguided_c(pixel *p, const ptrdiff_t p_stride,
+static void selfguided_wasm(pixel *p, const ptrdiff_t p_stride,
                          const pixel (*const left)[4],
                          const pixel *lpf, const ptrdiff_t lpf_stride,
                          const int w, const int h, const int sgr_idx,
@@ -573,19 +634,16 @@ static void selfguided_c(pixel *p, const ptrdiff_t p_stride,
     }
 }
 
-COLD void bitfn(dav1d_loop_restoration_dsp_init)(Dav1dLoopRestorationDSPContext *const c, int bpc) {
-    c->wiener = wiener_c;
-    c->selfguided = selfguided_c;
-
-#if HAVE_ASM
-#if ARCH_AARCH64 || ARCH_ARM
-    bitfn(dav1d_loop_restoration_dsp_init_arm)(c, bpc);
-#elif ARCH_PPC64LE
-    bitfn(dav1d_loop_restoration_dsp_init_ppc)(c);
-#elif ARCH_X86
-    bitfn(dav1d_loop_restoration_dsp_init_x86)(c);
-#elif ARCH_WASM
-    bitfn(dav1d_loop_restoration_dsp_init_wasm)(c);
 #endif
+
+#endif
+
+void bitfn(dav1d_loop_restoration_dsp_init_wasm)(Dav1dLoopRestorationDSPContext *const c) {
+    const unsigned flags = dav1d_get_cpu_flags();
+
+    if (!(flags & DAV1D_WASM_CPU_FLAG_SIMD_128)) return;
+#if BITDEPTH == 8
+    c->wiener = wiener_wasm;
+    //c->selfguided = selfguided_wasm;
 #endif
 }

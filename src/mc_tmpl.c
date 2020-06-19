@@ -949,6 +949,8 @@ COLD void bitfn(dav1d_mc_dsp_init)(Dav1dMCDSPContext *const c) {
     bitfn(dav1d_mc_dsp_init_arm)(c);
 #elif ARCH_X86
     bitfn(dav1d_mc_dsp_init_x86)(c);
+#elif ARCH_WASM
+    bitfn(dav1d_mc_dsp_init_wasm)(c);
 #endif
 #endif
 }

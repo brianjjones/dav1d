@@ -25,27 +25,14 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DAV1D_SRC_CPU_H
-#define DAV1D_SRC_CPU_H
-
 #include "config.h"
 
-#include "common/attributes.h"
+#include <stdint.h>
 
-#include "dav1d/common.h"
-
-#if ARCH_AARCH64 || ARCH_ARM
-#include "src/arm/cpu.h"
-#elif ARCH_PPC64LE
-#include "src/ppc/cpu.h"
-#elif ARCH_X86
-#include "src/x86/cpu.h"
-#elif ARCH_WASM
 #include "src/wasm/cpu.h"
-#endif
 
-void dav1d_init_cpu(void);
-unsigned dav1d_get_cpu_flags(void);
-DAV1D_API void dav1d_set_cpu_flags_mask(unsigned mask);
-
-#endif /* DAV1D_SRC_CPU_H */
+unsigned dav1d_get_cpu_flags_wasm(void) {
+    // There's no runtime detection of Wasm SIMD availability.
+    // It either compiles and runs or it doesn't.
+    return DAV1D_WASM_CPU_FLAG_SIMD_128;
+}

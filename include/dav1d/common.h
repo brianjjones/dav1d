@@ -48,11 +48,7 @@
     #endif
 #endif
 
-#if EPERM > 0
-#define DAV1D_ERR(e) (-(e)) ///< Negate POSIX error code.
-#else
-#define DAV1D_ERR(e) (e)
-#endif
+#define DAV1D_ERR(e) ((EPERM > 0) ? (-(e)) : (e)) ///< Negate POSIX error code.
 
 /**
  * A reference-counted object wrapper for a user-configurable pointer.

@@ -208,6 +208,21 @@ if is_asm_enabled
             'ppc/cdef_init_tmpl.c',
             'ppc/looprestoration_init_tmpl.c',
         )
+    elif (host_machine.cpu_family() == 'wasm32')
+
+        libdav1d_sources += files(
+            'wasm/cpu.c',
+        )
+        libdav1d_tmpl_sources += files(
+            'wasm/cdef_init_tmpl.c',
+            'wasm/looprestoration_tmpl.c',
+            'wasm/mc_init_tmpl.c',
+        )
+        libdav1d_sources += files(
+            'wasm/cdef.c',
+            'wasm/mc.c',
+        )
+
     endif
 endif
 

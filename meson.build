@@ -65,7 +65,8 @@ is_asm_enabled = (get_option('enable_asm') == true and
     (host_machine.cpu_family().startswith('x86') or
      host_machine.cpu_family() == 'aarch64'      or
      host_machine.cpu_family().startswith('arm') or
-     host_machine.cpu() == 'ppc64le'))
+     host_machine.cpu() == 'ppc64le'             or
+     host_machine.cpu_family() == 'wasm32'))
 cdata.set10('HAVE_ASM', is_asm_enabled)
 
 if is_asm_enabled and get_option('b_sanitize') == 'memory'
@@ -117,6 +118,13 @@ if host_machine.system() == 'windows'
     thread_compat_dep = declare_dependency(sources : files('src/win32/thread.c'))
 
     rt_dependency = []
+elif get_option('fake_atomics')
+    # Must disable pthreads for fake_atomics mode on emscripten
+    # with LLVM native WebAssembly backend.
+    thread_dependency = []
+    thread_compat_dep = []
+
+    rt_dependency = []
 else
     thread_dependency = dependency('threads')
     thread_compat_dep = []
@@ -160,7 +168,12 @@ endif
 # Header checks
 
 stdatomic_dependency = []
-if not cc.check_header('stdatomic.h')
+if get_option('fake_atomics')
+    # For emscripten single-threaded compiles using LLVM WebAssembly backend
+    stdatomic_dependency = declare_dependency(
+        include_directories : include_directories('include/compat/fake_atomics'),
+    )
+elif not cc.check_header('stdatomic.h')
     if cc.get_id() == 'msvc'
         # we have a custom replacement for MSVC
         stdatomic_dependency = declare_dependency(
@@ -356,6 +369,7 @@ if host_machine.cpu_family().startswith('x86')
 endif
 
 cdata.set10('ARCH_PPC64LE', host_machine.cpu() == 'ppc64le')
+cdata.set10('ARCH_WASM', host_machine.cpu_family().startswith('wasm'))
 
 if cc.symbols_have_underscore_prefix()
     cdata.set10('PREFIX', true)
