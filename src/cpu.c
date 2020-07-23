@@ -48,8 +48,6 @@ COLD void dav1d_init_cpu(void) {
     flags = dav1d_get_cpu_flags_arm();
 #elif ARCH_PPC64LE
     flags = dav1d_get_cpu_flags_ppc();
-#elif ARCH_WASM
-    flags = dav1d_get_cpu_flags_wasm();
 #elif ARCH_X86
     flags = dav1d_get_cpu_flags_x86();
 #endif

@@ -40,8 +40,6 @@
 #include "src/ppc/cpu.h"
 #elif ARCH_X86
 #include "src/x86/cpu.h"
-#elif ARCH_WASM
-#include "src/wasm/cpu.h"
 #endif
 
 void dav1d_init_cpu(void);

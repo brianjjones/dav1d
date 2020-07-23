@@ -69,6 +69,5 @@ bitfn_decls(void dav1d_cdef_dsp_init, Dav1dCdefDSPContext *c);
 bitfn_decls(void dav1d_cdef_dsp_init_arm, Dav1dCdefDSPContext *c);
 bitfn_decls(void dav1d_cdef_dsp_init_ppc, Dav1dCdefDSPContext *c);
 bitfn_decls(void dav1d_cdef_dsp_init_x86, Dav1dCdefDSPContext *c);
-bitfn_decls(void dav1d_cdef_dsp_init_wasm, Dav1dCdefDSPContext *c);
 
 #endif /* DAV1D_SRC_CDEF_H */
