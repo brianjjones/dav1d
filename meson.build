@@ -429,6 +429,7 @@ if is_asm_enabled and host_machine.cpu_family().startswith('x86')
         output: '@BASENAME@.obj',
         depfile: '@BASENAME@.obj.ndep',
         arguments: [
+            '-g',
             '-f', nasm_format,
             '-I', '@0@/src/'.format(dav1d_src_root),
             '-I', '@0@/'.format(meson.current_build_dir()),
