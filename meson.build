@@ -428,9 +428,9 @@ if is_asm_enabled and host_machine.cpu_family().startswith('x86')
     nasm_gen = generator(nasm,
         output: '@BASENAME@.obj',
         depfile: '@BASENAME@.obj.ndep',
-        arguments: [            
+        arguments: [      
+            '-g',      
             '-f', nasm_format,
-            '-g',
             '-I', '@0@/src/'.format(dav1d_src_root),
             '-I', '@0@/'.format(meson.current_build_dir()),
             '-MQ', '@OUTPUT@', '-MF', '@DEPFILE@',
