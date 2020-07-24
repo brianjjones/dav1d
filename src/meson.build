@@ -200,7 +200,7 @@ if is_asm_enabled
         endif
 
         # Compile the ASM sources with NASM
-        libdav1d_nasm_objs = nasm_gen.process(libdav1d_sources_asm)
+        libdav1d_nasm_objs = nasm_gen.process(libdav1d_sources_asm, extra_args: '-g')
     elif host_machine.cpu() == 'ppc64le'
         arch_flags = ['-maltivec', '-mvsx']
         libdav1d_sources += files(
