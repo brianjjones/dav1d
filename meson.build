@@ -252,7 +252,6 @@ if cc.get_id() != 'msvc'
     ]
     if host_machine.cpu_family() == 'x86'
         optional_arguments += [
-          '-msse2',
           '-mfpmath=sse',
         ]
     endif
